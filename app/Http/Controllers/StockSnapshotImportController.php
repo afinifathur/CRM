@@ -31,45 +31,53 @@ class StockSnapshotImportController extends Controller
     {
         $request->validate([
             'snapshot_date' => 'required|date|before_or_equal:today',
-            'file' => 'required|file|mimes:xlsx,xls,csv,txt', // txt allowed for csv sometimes
+            'file' => 'required|file|mimes:xlsx,xls,csv,txt',
         ]);
 
         $file = $request->file('file');
         $date = $request->input('snapshot_date');
 
-        // 1. Create a tracking batch
-        $batch = ImportBatch::create([
-            'import_type' => 'stock_snapshot',
-            'source_filename' => $file->getClientOriginalName(),
-            'imported_at' => now(),
-            'total_rows' => 0,
-            'inserted_rows' => 0,
-            'skipped_rows' => 0,
-            'notes' => 'Initializing import run...',
-        ]);
-
         try {
-            // 2. Execute service parsing
-            $result = $this->importService->import($batch, $file, $date);
+            // Save file temporarily in local storage
+            $filename = uniqid() . '_' . $file->getClientOriginalName();
+            $tempDir = storage_path('app/temp_imports');
+            if (!file_exists($tempDir)) {
+                mkdir($tempDir, 0755, true);
+            }
+            $file->move($tempDir, $filename);
+            $tempFilePath = $tempDir . '/' . $filename;
 
-            return redirect()
-                ->route('import.stock.index')
-                ->with('success', 'Excel file successfully parsed and processed!')
-                ->with('latest_batch', $result);
+            // Execute dry-run parsing
+            $previewService = app(\App\Services\Import\ImportPreviewService::class);
+            $previewData = $previewService->generatePreview('stock', $tempFilePath, $date);
+
+            // Create ImportPreviewBatch
+            $previewBatch = \App\Models\ImportPreviewBatch::create([
+                'type' => 'stock',
+                'user_session' => session()->getId(),
+                'status' => 'preview',
+                'total_rows' => $previewData['stats']['total_rows'],
+                'valid_rows' => $previewData['stats']['valid_rows'],
+                'warning_rows' => $previewData['stats']['warning_rows'],
+                'duplicate_rows' => $previewData['stats']['duplicate_rows'],
+                'preview_payload' => $previewData['stats'] + ['rows' => $previewData['rows']],
+                'raw_header_json' => $previewData['raw_headers'],
+                'raw_sample_rows_json' => $previewData['raw_samples'],
+                'temp_file_path' => $tempFilePath,
+                'source_filename' => $file->getClientOriginalName(),
+                'snapshot_date' => $date,
+            ]);
+
+            return redirect()->route('imports.preview', $previewBatch->id);
 
         } catch (\Throwable $e) {
-            Log::error('Stock Import Failed: ' . $e->getMessage(), [
-                'exception' => $e,
-                'batch_id' => $batch->id
-            ]);
-
-            $batch->update([
-                'notes' => 'Failed: ' . substr($e->getMessage(), 0, 250)
+            Log::error('Stock Import Dry Run Failed: ' . $e->getMessage(), [
+                'exception' => $e
             ]);
 
             return redirect()
                 ->route('import.stock.index')
-                ->withErrors(['file' => 'Failed to process file: ' . $e->getMessage()]);
+                ->withErrors(['file' => 'Failed to parse file: ' . $e->getMessage()]);
         }
     }
 }

@@ -35,6 +35,8 @@ class OutstandingPoImportService
 
         // 1. Discover header row dynamically
         $headerRowIndex = -1;
+        $detailHeaderRowIndex = -1;
+        $parserMode = 'Flat Table Mode';
         $columnMap = [
             'customer_code' => -1,
             'customer_name' => -1,
@@ -51,69 +53,193 @@ class OutstandingPoImportService
                 return strtolower(trim((string)$val));
             }, $row);
 
+            // Try to match Flat Table Mode headers first
+            $flatCols = [
+                'customer_code' => -1, 'customer_name' => -1, 'so_number' => -1,
+                'product_code' => -1, 'product_name' => -1, 'ordered_qty' => -1,
+                'outstanding_qty' => -1, 'order_date' => -1
+            ];
+
             foreach ($cleanedRow as $cellIndex => $cellVal) {
                 if (empty($cellVal)) {
                     continue;
                 }
 
-                // Match Customer Code
                 if ($this->matchPattern($cellVal, ['customer code', 'kode customer', 'kode pelanggan', 'cust code', 'customer_code'])) {
-                    $columnMap['customer_code'] = $cellIndex;
-                }
-                // Match Customer Name
-                elseif ($this->matchPattern($cellVal, ['customer name', 'nama customer', 'nama pelanggan', 'cust name', 'customer_name'])) {
-                    $columnMap['customer_name'] = $cellIndex;
-                }
-                // Match SO Number
-                elseif ($this->matchPattern($cellVal, ['so number', 'nomor so', 'no so', 'sales order number', 'po number', 'nomor po', 'so_number'])) {
-                    $columnMap['so_number'] = $cellIndex;
-                }
-                // Match Product Code
-                elseif ($this->matchPattern($cellVal, ['product code', 'kode produk', 'item code', 'kode barang', 'product_code'])) {
-                    $columnMap['product_code'] = $cellIndex;
-                }
-                // Match Product Name
-                elseif ($this->matchPattern($cellVal, ['product name', 'nama produk', 'item name', 'nama barang', 'deskripsi', 'description', 'product_name'])) {
-                    $columnMap['product_name'] = $cellIndex;
-                }
-                // Match Ordered Qty
-                elseif ($this->matchPattern($cellVal, ['ordered qty', 'order qty', 'jumlah order', 'ordered quantity', 'qty order', 'ordered_qty'])) {
-                    $columnMap['ordered_qty'] = $cellIndex;
-                }
-                // Match Undelivered Qty (Outstanding Qty)
-                elseif ($this->matchPattern($cellVal, ['undelivered qty', 'outstanding qty', 'outstanding', 'sisa order', 'undelivered quantity', 'outstanding_qty'])) {
-                    $columnMap['outstanding_qty'] = $cellIndex;
-                }
-                // Match Order Date
-                elseif ($this->matchPattern($cellVal, ['order date', 'tanggal order', 'so date', 'tanggal so', 'order_date'])) {
-                    $columnMap['order_date'] = $cellIndex;
+                    $flatCols['customer_code'] = $cellIndex;
+                } elseif ($this->matchPattern($cellVal, ['customer name', 'nama customer', 'nama pelanggan', 'cust name', 'customer_name'])) {
+                    $flatCols['customer_name'] = $cellIndex;
+                } elseif ($this->matchPattern($cellVal, ['so number', 'nomor so', 'no so', 'sales order number', 'po number', 'nomor po', 'so_number'])) {
+                    $flatCols['so_number'] = $cellIndex;
+                } elseif ($this->matchPattern($cellVal, ['product code', 'kode produk', 'item code', 'kode barang', 'product_code'])) {
+                    $flatCols['product_code'] = $cellIndex;
+                } elseif ($this->matchPattern($cellVal, ['product name', 'nama produk', 'item name', 'nama barang', 'deskripsi', 'description', 'product_name'])) {
+                    $flatCols['product_name'] = $cellIndex;
+                } elseif ($this->matchPattern($cellVal, ['ordered qty', 'order qty', 'jumlah order', 'ordered quantity', 'qty order', 'ordered_qty'])) {
+                    $flatCols['ordered_qty'] = $cellIndex;
+                } elseif ($this->matchPattern($cellVal, ['undelivered qty', 'outstanding qty', 'outstanding', 'sisa order', 'undelivered quantity', 'outstanding_qty'])) {
+                    $flatCols['outstanding_qty'] = $cellIndex;
+                } elseif ($this->matchPattern($cellVal, ['order date', 'tanggal order', 'so date', 'tanggal so', 'order_date'])) {
+                    $flatCols['order_date'] = $cellIndex;
                 }
             }
 
-            // Consider it the header row if we successfully mapped Customer Code, SO Number, Product Code, and Outstanding Qty
-            if ($columnMap['customer_code'] !== -1 && $columnMap['so_number'] !== -1 && $columnMap['product_code'] !== -1 && $columnMap['outstanding_qty'] !== -1) {
+            if ($flatCols['customer_code'] !== -1 && $flatCols['so_number'] !== -1 && $flatCols['product_code'] !== -1 && $flatCols['outstanding_qty'] !== -1) {
                 $headerRowIndex = $index;
+                $columnMap = $flatCols;
+                $parserMode = 'Flat Table Mode';
                 break;
+            }
+
+            // Try to match Grouped Customer ERP Mode headers (Two-Row Structure)
+            $custCodeIdx = -1;
+            $custNameIdx = -1;
+            foreach ($cleanedRow as $cellIndex => $cellVal) {
+                if (empty($cellVal)) continue;
+                if ($this->matchPattern($cellVal, ['cust. code', 'cust code', 'customer code', 'customer_code'])) {
+                    $custCodeIdx = $cellIndex;
+                } elseif ($this->matchPattern($cellVal, ['cust. short name', 'cust short name', 'customer name', 'customer_name'])) {
+                    $custNameIdx = $cellIndex;
+                }
+            }
+
+            if ($custCodeIdx !== -1 && $custNameIdx !== -1) {
+                $nextIndex = $index + 1;
+                if (isset($rows[$nextIndex])) {
+                    $nextCleanedRow = array_map(fn($v) => strtolower(trim((string)$v)), $rows[$nextIndex]);
+                    
+                    $groupedCols = [
+                        'customer_code' => $custCodeIdx,
+                        'customer_name' => $custNameIdx,
+                        'so_number' => -1,
+                        'order_date' => -1,
+                        'product_name' => -1,
+                        'ordered_qty' => -1,
+                        'outstanding_qty' => -1,
+                    ];
+
+                    foreach ($nextCleanedRow as $cellIndex => $cellVal) {
+                        if (empty($cellVal)) continue;
+
+                        if ($this->matchPattern($cellVal, ['so no.', 'so no', 'so number', 'so_number'])) {
+                            $groupedCols['so_number'] = $cellIndex;
+                        } elseif ($this->matchPattern($cellVal, ['so date', 'order date', 'tanggal so', 'order_date'])) {
+                            $groupedCols['order_date'] = $cellIndex;
+                        } elseif ($this->matchPattern($cellVal, ['product name', 'nama produk', 'item name', 'nama barang', 'product_name'])) {
+                            $groupedCols['product_name'] = $cellIndex;
+                        } elseif ($this->matchPattern($cellVal, ['so qty', 'ordered qty', 'ordered quantity', 'ordered_qty'])) {
+                            $groupedCols['ordered_qty'] = $cellIndex;
+                        } elseif ($this->matchPattern($cellVal, ['undlv qty > 0', 'undlv qty', 'outstanding qty', 'outstanding_qty'])) {
+                            $groupedCols['outstanding_qty'] = $cellIndex;
+                        }
+                    }
+
+                    if ($groupedCols['so_number'] !== -1 && $groupedCols['product_name'] !== -1 && $groupedCols['outstanding_qty'] !== -1) {
+                        $headerRowIndex = $index;
+                        $detailHeaderRowIndex = $nextIndex;
+                        $columnMap = $groupedCols;
+                        $columnMap['product_code'] = -1; // No product code column
+                        $parserMode = 'Grouped Customer ERP Mode';
+                        break;
+                    }
+                }
             }
         }
 
         if ($headerRowIndex === -1) {
-            throw new \Exception("Could not detect Outstanding PO report headers automatically. Please make sure the sheet contains columns like: 'Customer Code', 'SO Number', 'Product Code', 'Ordered Qty', and 'Undelivered Qty'.");
+            // Generate temporary parser diagnostics
+            $getColLetter = function ($index) {
+                $letter = '';
+                while ($index >= 0) {
+                    $letter = chr(($index % 26) + 65) . $letter;
+                    $index = intval($index / 26) - 1;
+                }
+                return $letter;
+            };
+
+            $debugDump = "";
+            for ($r = 0; $r < min(30, count($rows)); $r++) {
+                $row = $rows[$r];
+                $rowNum = $r + 1;
+                $rowLines = [];
+                foreach ($row as $cIndex => $val) {
+                    $cleanVal = trim((string)$val);
+                    if ($cleanVal !== '') {
+                        $colLetter = $getColLetter($cIndex);
+                        $rowLines[] = "{$colLetter} = \"{$cleanVal}\"";
+                    }
+                }
+                $debugDump .= "Row {$rowNum}:\n";
+                if (!empty($rowLines)) {
+                    $debugDump .= implode("\n", $rowLines) . "\n\n";
+                } else {
+                    $debugDump .= "(empty)\n\n";
+                }
+            }
+
+            file_put_contents(storage_path('logs/po_parser_debug.log'), $debugDump);
+            session()->flash('po_parser_debug_sample', $debugDump);
+
+            throw new \Exception("Could not detect Outstanding PO report headers automatically. Please make sure the sheet contains columns like: 'Customer Code', 'SO Number', 'Product Code', 'Ordered Qty', and 'Undelivered Qty' (or 'Cust. Code', 'SO No.', 'Product Name', 'SO Qty', and 'UnDlv Qty > 0').");
         }
 
         $totalRows = 0;
         $insertedRows = 0;
         $skippedRows = 0;
+        $totalCustomerGroups = 0;
+
+        $insertedCustomersCount = 0;
+        $insertedProductsCount = 0;
+        $insertedSalesOrdersCount = 0;
+        $insertedSalesOrderLinesCount = 0;
+
+        $currentCustomerCode = null;
+        $currentCustomerName = null;
+
+        $startRowIndex = ($parserMode === 'Grouped Customer ERP Mode') ? $detailHeaderRowIndex + 1 : $headerRowIndex + 1;
 
         // 2. Parse and upsert row by row starting from after header
-        for ($i = $headerRowIndex + 1; $i < count($rows); $i++) {
+        for ($i = $startRowIndex; $i < count($rows); $i++) {
             $row = $rows[$i];
 
-            $custCode = $this->getMappedVal($row, $columnMap['customer_code']);
-            $custName = $this->getMappedVal($row, $columnMap['customer_name']);
-            $soNumber = $this->getMappedVal($row, $columnMap['so_number']);
-            $prodCode = $this->getMappedVal($row, $columnMap['product_code']);
-            $prodName = $this->getMappedVal($row, $columnMap['product_name']);
+            // Skip completely empty rows
+            $nonEmptyCells = array_filter($row, fn($v) => trim((string)$v) !== '');
+            if (empty($nonEmptyCells)) {
+                continue;
+            }
+
+            $custCodeVal = $this->getMappedVal($row, $columnMap['customer_code']);
+            $custNameVal = $this->getMappedVal($row, $columnMap['customer_name']);
+            $soNumberVal = $this->getMappedVal($row, $columnMap['so_number']);
+            $prodNameVal = $this->getMappedVal($row, $columnMap['product_name']);
+
+            // Detect Customer Header Row in Grouped Customer ERP Mode
+            if ($parserMode === 'Grouped Customer ERP Mode') {
+                if (!empty($custCodeVal) && !empty($custNameVal) && empty($prodNameVal)) {
+                    if ($this->isIgnoredRow('', $custCodeVal)) {
+                        continue;
+                    }
+                    $currentCustomerCode = $custCodeVal;
+                    $currentCustomerName = $custNameVal;
+                    $totalCustomerGroups++;
+                    continue;
+                }
+            }
+
+            if ($parserMode === 'Grouped Customer ERP Mode') {
+                $custCode = $currentCustomerCode;
+                $custName = $currentCustomerName;
+                $soNumber = $soNumberVal;
+                $prodCode = $prodNameVal;
+                $prodName = $prodNameVal;
+            } else {
+                $custCode = $custCodeVal;
+                $custName = $custNameVal;
+                $soNumber = $soNumberVal;
+                $prodCode = $this->getMappedVal($row, $columnMap['product_code']);
+                $prodName = $prodNameVal;
+            }
+
             $orderedQtyStr = $this->getMappedVal($row, $columnMap['ordered_qty']);
             $outstandingQtyStr = $this->getMappedVal($row, $columnMap['outstanding_qty']);
             $orderDateStr = $this->getMappedVal($row, $columnMap['order_date']);
@@ -131,13 +257,20 @@ class OutstandingPoImportService
             $totalRows++;
 
             // Use database transaction for atomic inserts/updates
-            DB::transaction(function () use ($custCode, $custName, $soNumber, $prodCode, $prodName, $orderedQty, $outstandingQty, $orderDate, $batch, &$insertedRows, &$skippedRows) {
+            DB::transaction(function () use (
+                $custCode, $custName, $soNumber, $prodCode, $prodName, $orderedQty, $outstandingQty, $orderDate, $batch,
+                &$insertedRows, &$skippedRows,
+                &$insertedCustomersCount, &$insertedProductsCount, &$insertedSalesOrdersCount, &$insertedSalesOrderLinesCount
+            ) {
                 // Find or create Customer
                 $customerName = !empty($custName) ? $custName : $custCode;
                 $customer = Customer::firstOrCreate(
                     ['customer_code' => $custCode],
                     ['customer_name' => $customerName]
                 );
+                if ($customer->wasRecentlyCreated) {
+                    $insertedCustomersCount++;
+                }
 
                 // Find or create Product
                 $productName = !empty($prodName) ? $prodName : $prodCode;
@@ -145,6 +278,9 @@ class OutstandingPoImportService
                     ['product_code' => $prodCode],
                     ['product_name' => $productName]
                 );
+                if ($product->wasRecentlyCreated) {
+                    $insertedProductsCount++;
+                }
 
                 // Find or create Sales Order
                 $salesOrder = SalesOrder::firstOrCreate(
@@ -155,6 +291,9 @@ class OutstandingPoImportService
                         'import_batch_id' => $batch->id,
                     ]
                 );
+                if ($salesOrder->wasRecentlyCreated) {
+                    $insertedSalesOrdersCount++;
+                }
 
                 // Safe Conflict Resolution (Idempotency Strategy)
                 $orderLine = SalesOrderLine::where('sales_order_id', $salesOrder->id)
@@ -172,6 +311,7 @@ class OutstandingPoImportService
                         'status' => $outstandingQty <= 0 ? 'completed' : 'open',
                     ]);
                     $insertedRows++;
+                    $insertedSalesOrderLinesCount++;
                 } else {
                     // Line already exists: check if shipments have already been allocated locally
                     if (bccomp($orderLine->allocated_qty, '0', 4) === 0) {
@@ -182,6 +322,7 @@ class OutstandingPoImportService
                             'status' => $outstandingQty <= 0 ? 'completed' : 'open',
                         ]);
                         $insertedRows++;
+                        $insertedSalesOrderLinesCount++;
                     } else {
                         // Scenario B: Shipments have been allocated -> Skip updates to preserve local ledger integrity
                         $skippedRows++;
@@ -192,11 +333,22 @@ class OutstandingPoImportService
         }
 
         // 3. Update batch status
+        $stats = [
+            'success' => true,
+            'parser_mode' => $parserMode,
+            'inserted_customers' => $insertedCustomersCount,
+            'inserted_products' => $insertedProductsCount,
+            'inserted_so_headers' => $insertedSalesOrdersCount,
+            'inserted_so_lines' => $insertedSalesOrderLinesCount,
+            'skipped_records' => $skippedRows,
+            'text_summary' => "Successfully parsed. Mode: {$parserMode}. Detected Customer Header Row: " . ($headerRowIndex + 1) . ". Detected Detail Header Row: " . (($parserMode === 'Grouped Customer ERP Mode') ? ($detailHeaderRowIndex + 1) : 'N/A') . ". Customer Groups: {$totalCustomerGroups}. Detail Rows: {$totalRows}. Processed: {$totalRows}, Inserted/Updated: {$insertedRows}, Skipped Active Allocations: {$skippedRows}."
+        ];
+
         $batch->update([
             'total_rows' => $totalRows,
             'inserted_rows' => $insertedRows,
             'skipped_rows' => $skippedRows,
-            'notes' => "Successfully parsed. Processed: {$totalRows}, Inserted/Updated: {$insertedRows}, Skipped Active Allocations: {$skippedRows}.",
+            'notes' => json_encode($stats),
         ]);
 
         return $batch;

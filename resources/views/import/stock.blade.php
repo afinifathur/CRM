@@ -1,556 +1,334 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Snapshot Import - CRM Reconciliation</title>
-    <!-- Modern Premium Font -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
-    <style>
-        :root {
-            --bg-primary: #0b0f19;
-            --bg-secondary: #131a26;
-            --bg-card: rgba(20, 28, 45, 0.7);
-            --accent-cyan: #06b6d4;
-            --accent-blue: #3b82f6;
-            --accent-purple: #8b5cf6;
-            --text-main: #f3f4f6;
-            --text-muted: #9ca3af;
-            --success: #10b981;
-            --error: #ef4444;
-            --warning: #f59e0b;
-            --border: rgba(255, 255, 255, 0.08);
+@extends('layouts.app')
+
+@section('title', 'Stock Snapshot Ingestion - CRM Reconciliation')
+
+@section('styles')
+<style>
+    .grid-container {
+        display: grid;
+        grid-template-columns: 1.1fr 1.9fr;
+        gap: 2rem;
+        align-items: start;
+    }
+
+    @media (max-width: 992px) {
+        .grid-container {
+            grid-template-columns: 1fr;
         }
+    }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Outfit', sans-serif;
-            scroll-behavior: smooth;
-        }
+    .card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 1.25rem;
+        padding: 2rem;
+        backdrop-filter: blur(12px);
+    }
 
-        body {
-            background-color: var(--bg-primary);
-            color: var(--text-main);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
-            align-items: center;
-            overflow-x: hidden;
-            background-image: 
-                radial-gradient(circle at 10% 20%, rgba(59, 130, 246, 0.08) 0%, transparent 40%),
-                radial-gradient(circle at 90% 80%, rgba(139, 92, 246, 0.08) 0%, transparent 40%);
-        }
+    .title {
+        font-size: 1.3rem;
+        font-weight: 600;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 0.75rem;
+    }
 
-        header {
-            width: 100%;
-            max-width: 1200px;
-            padding: 2.5rem 1.5rem 1.5rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+    .title-icon {
+        color: var(--accent-cyan);
+    }
 
-        .logo-container {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 1.25rem;
+    }
 
-        .logo-icon {
-            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
-            width: 2.5rem;
-            height: 2.5rem;
-            border-radius: 0.75rem;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-weight: 700;
-            font-size: 1.25rem;
-            color: #fff;
-            box-shadow: 0 0 15px rgba(6, 182, 212, 0.4);
-        }
+    label {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        font-weight: 500;
+    }
 
-        .logo-text {
-            font-size: 1.5rem;
-            font-weight: 700;
-            background: linear-gradient(to right, #fff, var(--text-muted));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
+    .input-control {
+        width: 100%;
+        background-color: #111827;
+        border: 1px solid var(--border);
+        color: #fff;
+        padding: 0.65rem 0.75rem;
+        border-radius: 0.5rem;
+        font-size: 0.88rem;
+        outline: none;
+    }
 
-        .badge-pill {
-            background: rgba(6, 182, 212, 0.15);
-            border: 1px solid rgba(6, 182, 212, 0.3);
-            color: var(--accent-cyan);
-            padding: 0.25rem 0.75rem;
-            border-radius: 9999px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-        }
+    .file-upload-wrapper {
+        border: 2px dashed var(--border);
+        border-radius: 0.75rem;
+        padding: 2rem 1.5rem;
+        text-align: center;
+        position: relative;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+        background-color: rgba(255,255,255,0.01);
+    }
 
-        main {
-            width: 100%;
-            max-width: 1200px;
-            padding: 0 1.5rem 3.5rem;
-            display: grid;
-            grid-template-columns: 1.2fr 1.8fr;
-            gap: 2.5rem;
-        }
+    .file-upload-wrapper:hover {
+        border-color: var(--accent-cyan);
+    }
 
-        @media (max-width: 900px) {
-            main {
-                grid-template-columns: 1fr;
-            }
-        }
+    .file-upload-wrapper input[type="file"] {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+    }
 
-        .card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 1.25rem;
-            padding: 2rem;
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
+    .file-icon {
+        color: var(--text-muted);
+    }
 
-        .card:hover {
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
-        }
+    .btn-submit {
+        background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+        color: #fff;
+        border: none;
+        width: 100%;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 4px 10px rgba(6, 182, 212, 0.2);
+    }
 
-        .title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            margin-bottom: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 0.75rem;
-        }
+    .btn-submit:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 15px rgba(6, 182, 212, 0.3);
+    }
 
-        .title-icon {
-            color: var(--accent-cyan);
-        }
+    .alert {
+        border-radius: 0.75rem;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        font-size: 0.88rem;
+        border: 1px solid transparent;
+    }
 
-        /* Forms Styling */
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
+    .alert-success {
+        background-color: rgba(16, 185, 129, 0.08);
+        border-color: rgba(16, 185, 129, 0.2);
+        color: var(--success);
+    }
 
-        label {
-            display: block;
-            font-size: 0.9rem;
-            color: var(--text-muted);
-            margin-bottom: 0.5rem;
-            font-weight: 500;
-        }
+    .alert-danger {
+        background-color: rgba(239, 68, 68, 0.08);
+        border-color: rgba(239, 68, 68, 0.2);
+        color: var(--error);
+    }
 
-        .input-control {
-            width: 100%;
-            background-color: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 0.75rem;
-            padding: 0.85rem 1rem;
-            color: #fff;
-            font-size: 0.95rem;
-            outline: none;
-            transition: all 0.3s ease;
-        }
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
+        margin-top: 0.75rem;
+    }
 
-        .input-control:focus {
-            border-color: var(--accent-cyan);
-            box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
-        }
+    .stat-card {
+        background-color: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--border);
+        border-radius: 0.375rem;
+        padding: 0.5rem;
+        text-align: center;
+    }
 
-        /* File Upload area */
-        .file-upload-wrapper {
-            position: relative;
-            width: 100%;
-            height: 150px;
-            background-color: rgba(19, 26, 38, 0.5);
-            border: 2px dashed var(--border);
-            border-radius: 0.75rem;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            gap: 0.5rem;
-        }
+    .stat-val {
+        font-size: 1.15rem;
+        font-weight: 700;
+    }
 
-        .file-upload-wrapper:hover {
-            border-color: var(--accent-cyan);
-            background-color: rgba(6, 182, 212, 0.03);
-        }
+    .stat-label {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        margin-top: 0.2rem;
+    }
 
-        .file-upload-wrapper input[type="file"] {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            opacity: 0;
-            cursor: pointer;
-        }
+    .row-total { color: var(--accent-cyan); }
+    .row-inserted { color: var(--success); }
+    .row-skipped { color: var(--warning); }
 
-        .file-icon {
-            font-size: 2.25rem;
-            color: var(--text-muted);
-            transition: color 0.3s ease;
-        }
+    .history-container {
+        overflow-x: auto;
+    }
 
-        .file-upload-wrapper:hover .file-icon {
-            color: var(--accent-cyan);
-        }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.88rem;
+    }
 
-        .file-name-display {
-            font-size: 0.85rem;
-            color: var(--accent-cyan);
-            font-weight: 500;
-            text-align: center;
-            max-width: 90%;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
+    th {
+        padding: 0.85rem;
+        color: var(--text-muted);
+        font-weight: 600;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.78rem;
+        text-transform: uppercase;
+    }
 
-        .btn-submit {
-            width: 100%;
-            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
-            color: #fff;
-            border: none;
-            padding: 1rem;
-            border-radius: 0.75rem;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 5px 15px rgba(6, 182, 212, 0.3);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 0.5rem;
-        }
+    td {
+        padding: 1rem 0.85rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
 
-        .btn-submit:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(6, 182, 212, 0.4);
-        }
+    .badge {
+        display: inline-block;
+        padding: 0.2rem 0.4rem;
+        font-size: 0.72rem;
+        font-weight: 600;
+        border-radius: 0.25rem;
+    }
 
-        .btn-submit:active {
-            transform: translateY(0);
-        }
+    .badge-success { background-color: rgba(16, 185, 129, 0.15); color: var(--success); }
+    .badge-danger { background-color: rgba(239, 68, 68, 0.15); color: var(--error); }
+</style>
+@endsection
 
-        /* Notifications & Alerts */
-        .alert {
-            border-radius: 0.75rem;
-            padding: 1rem 1.25rem;
-            margin-bottom: 1.5rem;
-            font-size: 0.9rem;
-            line-height: 1.5;
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
-            animation: slideDown 0.3s ease;
-            border: 1px solid transparent;
-        }
+@section('content')
+<div class="grid-container">
+    <!-- Left Column: Upload Form -->
+    <div class="card">
+        <h2 class="title">
+            <svg class="title-icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+            Upload Stock Snapshot
+        </h2>
 
-        .alert-success {
-            background-color: rgba(16, 185, 129, 0.08);
-            border-color: rgba(16, 185, 129, 0.2);
-            color: var(--success);
-        }
+        @if (session('success'))
+            <div class="alert alert-success">
+                <strong>Import Success!</strong>
+                @if (session('latest_batch'))
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-val row-total">{{ session('latest_batch')->total_rows }}</div>
+                            <div class="stat-label">Total</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-val row-inserted">{{ session('latest_batch')->inserted_rows }}</div>
+                            <div class="stat-label">Inserted</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-val row-skipped">{{ session('latest_batch')->skipped_rows }}</div>
+                            <div class="stat-label">Skipped</div>
+                        </div>
+                    </div>
+                @endif
+            </div>
+        @endif
 
-        .alert-danger {
-            background-color: rgba(239, 68, 68, 0.08);
-            border-color: rgba(239, 68, 68, 0.2);
-            color: var(--error);
-        }
+        @if ($errors->any())
+            <div class="alert alert-danger">
+                <strong>Error:</strong> {{ $errors->first() }}
+            </div>
+        @endif
 
-        .alert-title {
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        /* Statistics Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1rem;
-            margin-top: 0.75rem;
-        }
-
-        .stat-card {
-            background-color: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border);
-            border-radius: 0.5rem;
-            padding: 0.75rem;
-            text-align: center;
-        }
-
-        .stat-val {
-            font-size: 1.3rem;
-            font-weight: 700;
-            color: #fff;
-        }
-
-        .stat-label {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            margin-top: 0.25rem;
-        }
-
-        /* History Table Styling */
-        .history-container {
-            overflow-x: auto;
-            width: 100%;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            text-align: left;
-            font-size: 0.9rem;
-        }
-
-        th {
-            padding: 1rem;
-            color: var(--text-muted);
-            font-weight: 600;
-            border-bottom: 1px solid var(--border);
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        td {
-            padding: 1.15rem 1rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-            color: var(--text-main);
-        }
-
-        tr:hover td {
-            background-color: rgba(255, 255, 255, 0.01);
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            font-size: 0.75rem;
-            font-weight: 600;
-            border-radius: 0.25rem;
-        }
-
-        .badge-success {
-            background-color: rgba(16, 185, 129, 0.15);
-            color: var(--success);
-        }
-
-        .badge-danger {
-            background-color: rgba(239, 68, 68, 0.15);
-            color: var(--error);
-        }
-
-        .row-total { color: var(--accent-cyan); font-weight: 600; }
-        .row-inserted { color: var(--success); font-weight: 600; }
-        .row-skipped { color: var(--warning); font-weight: 600; }
-
-        .empty-history {
-            text-align: center;
-            color: var(--text-muted);
-            padding: 3rem 1rem;
-        }
-
-        /* Keyframes */
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .info-panel {
-            background-color: rgba(59, 130, 246, 0.05);
-            border: 1px solid rgba(59, 130, 246, 0.15);
-            border-radius: 0.75rem;
-            padding: 1rem;
-            margin-bottom: 1.5rem;
-            font-size: 0.85rem;
-            color: #93c5fd;
-            line-height: 1.5;
-        }
-    </style>
-</head>
-<body>
-
-    <header>
-        <div class="logo-container">
-            <div class="logo-icon">C</div>
-            <h1 class="logo-text">CRM Overlay</h1>
+        <div style="background-color: rgba(6, 182, 212, 0.05); border: 1px solid rgba(6, 182, 212, 0.15); border-radius: 0.5rem; padding: 0.85rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: #a5f3fc; line-height: 1.5;">
+            💡 <strong>Ingestion Rule:</strong> Duplicate records for the same product and snapshot date are automatically skipped to enforce idempotency.
         </div>
-        <div class="badge-pill">Reconciliation System</div>
-    </header>
 
-    <main>
-        <!-- Left Column: Upload Form -->
-        <section>
-            <div class="card">
-                <h2 class="title">
-                    <svg class="title-icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                    Upload Stock Snapshot
-                </h2>
-
-                <!-- Status Feedback Alerts -->
-                @if (session('success'))
-                    <div class="alert alert-success">
-                        <div class="alert-title">
-                            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            {{ session('success') }}
-                        </div>
-                        @if (session('latest_batch'))
-                            <div class="stats-grid">
-                                <div class="stat-card">
-                                    <div class="stat-val row-total">{{ session('latest_batch')->total_rows }}</div>
-                                    <div class="stat-label">Total Rows</div>
-                                </div>
-                                <div class="stat-card">
-                                    <div class="stat-val row-inserted">{{ session('latest_batch')->inserted_rows }}</div>
-                                    <div class="stat-label">Inserted</div>
-                                </div>
-                                <div class="stat-card">
-                                    <div class="stat-val row-skipped">{{ session('latest_batch')->skipped_rows }}</div>
-                                    <div class="stat-label">Skipped</div>
-                                </div>
-                            </div>
-                        @endif
-                    </div>
-                @endif
-
-                @if ($errors->any())
-                    <div class="alert alert-danger">
-                        <div class="alert-title">
-                            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            Import Error
-                        </div>
-                        <p>{{ $errors->first() }}</p>
-                    </div>
-                @endif
-
-                <div class="info-panel">
-                    💡 <strong>ERP Export MVP Rules:</strong><br>
-                    - The system will dynamically find headers (e.g. <i>Product Code, Name, PCS, KG</i>).<br>
-                    - Existing entries for the same date and product are skipped safely (idempotent).
-                </div>
-
-                <form action="{{ route('import.stock.store') }}" method="POST" enctype="multipart/form-data">
-                    @csrf
-                    
-                    <!-- Date Picker -->
-                    <div class="form-group">
-                        <label for="snapshot_date">Tanggal Snapshot</label>
-                        <input type="date" id="snapshot_date" name="snapshot_date" value="{{ date('Y-m-d') }}" class="input-control" required>
-                    </div>
-
-                    <!-- File Drop Area -->
-                    <div class="form-group">
-                        <label>Pilih File Excel / CSV</label>
-                        <div class="file-upload-wrapper" id="drop-area">
-                            <svg class="file-icon" width="40" height="40" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                            <span id="file-label-text">Geser file kesini atau klik untuk browse</span>
-                            <span class="file-name-display" id="file-name"></span>
-                            <input type="file" name="file" id="file-input" accept=".xlsx,.xls,.csv" required>
-                        </div>
-                    </div>
-
-                    <button type="submit" class="btn-submit">
-                        Proses Import Excel
-                    </button>
-                </form>
+        <form action="{{ route('import.stock.store') }}" method="POST" enctype="multipart/form-data">
+            @csrf
+            <div class="form-group">
+                <label for="snapshot_date">Tanggal Snapshot</label>
+                <input type="date" id="snapshot_date" name="snapshot_date" value="{{ date('Y-m-d') }}" class="input-control" required>
             </div>
-        </section>
 
-        <!-- Right Column: Batch History -->
-        <section>
-            <div class="card">
-                <h2 class="title">
-                    <svg class="title-icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    Import Batches History (Last 5)
-                </h2>
-
-                <div class="history-container">
-                    @if ($batches->isEmpty())
-                        <div class="empty-history">
-                            Belum ada riwayat batch stock snapshot.
-                        </div>
-                    @else
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Batch ID</th>
-                                    <th>File Name</th>
-                                    <th>Imported At</th>
-                                    <th style="text-align: center;">Total</th>
-                                    <th style="text-align: center;">New</th>
-                                    <th style="text-align: center;">Skipped</th>
-                                    <th>Notes</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($batches as $batch)
-                                    <tr>
-                                        <td><strong>#{{ $batch->id }}</strong></td>
-                                        <td>{{ $batch->source_filename ?? '-' }}</td>
-                                        <td>{{ $batch->imported_at ? $batch->imported_at->format('d M Y H:i') : '-' }}</td>
-                                        <td style="text-align: center;" class="row-total">{{ $batch->total_rows }}</td>
-                                        <td style="text-align: center;" class="row-inserted">{{ $batch->inserted_rows }}</td>
-                                        <td style="text-align: center;" class="row-skipped">{{ $batch->skipped_rows }}</td>
-                                        <td>
-                                            @if (str_contains($batch->notes ?? '', 'Failed'))
-                                                <span class="badge badge-danger">Failed</span>
-                                            @else
-                                                <span class="badge badge-success">Success</span>
-                                            @endif
-                                            <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-top: 0.25rem;">
-                                                {{ $batch->notes }}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    @endif
+            <div class="form-group">
+                <label>Pilih File Excel / CSV</label>
+                <div class="file-upload-wrapper">
+                    <svg class="file-icon" width="36" height="36" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    <span id="file-label-text">Geser file kesini atau klik untuk memilih</span>
+                    <span id="file-name" style="font-weight: 600; color: var(--accent-cyan);"></span>
+                    <input type="file" name="file" id="file-input" accept=".xlsx,.xls,.csv" required>
                 </div>
             </div>
-        </section>
-    </main>
 
-    <script>
-        // Simple elegant Javascript to handle file name display
-        const fileInput = document.getElementById('file-input');
-        const fileNameSpan = document.getElementById('file-name');
-        const labelText = document.getElementById('file-label-text');
+            <button type="submit" class="btn-submit">
+                Proses Import Stock
+            </button>
+        </form>
+    </div>
 
-        fileInput.addEventListener('change', function(e) {
-            if (e.target.files.length > 0) {
-                const name = e.target.files[0].name;
-                fileNameSpan.textContent = name;
-                labelText.style.display = 'none';
-            } else {
-                fileNameSpan.textContent = '';
-                labelText.style.display = 'block';
-            }
-        });
-    </script>
-</body>
-</html>
+    <!-- Right Column: Batch History -->
+    <div class="card">
+        <h2 class="title">
+            <svg class="title-icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            Ingestion History (Last 5 Batches)
+        </h2>
+
+        <div class="history-container">
+            @if ($batches->isEmpty())
+                <div style="text-align: center; color: var(--text-muted); padding: 3rem 1rem;">
+                    Belum ada riwayat batch stock snapshot.
+                </div>
+            @else
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Batch ID</th>
+                            <th>Filename</th>
+                            <th>Imported At</th>
+                            <th style="text-align: center;">Total</th>
+                            <th style="text-align: center;">New</th>
+                            <th style="text-align: center;">Skipped</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($batches as $batch)
+                            <tr>
+                                <td><strong>#{{ $batch->id }}</strong></td>
+                                <td>{{ $batch->source_filename ?? '-' }}</td>
+                                <td>{{ $batch->imported_at ? $batch->imported_at->format('d M Y H:i') : '-' }}</td>
+                                <td style="text-align: center;" class="row-total">{{ $batch->total_rows }}</td>
+                                <td style="text-align: center;" class="row-inserted">{{ $batch->inserted_rows }}</td>
+                                <td style="text-align: center;" class="row-skipped">{{ $batch->skipped_rows }}</td>
+                                <td>
+                                    <span class="badge {{ str_contains($batch->notes ?? '', 'Failed') ? 'badge-danger' : 'badge-success' }}">
+                                        {{ str_contains($batch->notes ?? '', 'Failed') ? 'Failed' : 'Success' }}
+                                    </span>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            @endif
+        </div>
+    </div>
+</div>
+@endsection
+
+@section('scripts')
+<script>
+    const fileInput = document.getElementById('file-input');
+    const fileNameSpan = document.getElementById('file-name');
+    const labelText = document.getElementById('file-label-text');
+
+    fileInput.addEventListener('change', function(e) {
+        if (e.target.files.length > 0) {
+            fileNameSpan.textContent = e.target.files[0].name;
+            labelText.style.display = 'none';
+        } else {
+            fileNameSpan.textContent = '';
+            labelText.style.display = 'block';
+        }
+    });
+</script>
+@endsection
